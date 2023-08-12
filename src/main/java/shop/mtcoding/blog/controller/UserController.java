@@ -1,20 +1,27 @@
 package shop.mtcoding.blog.controller;
 
+import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 
+import org.mindrot.jbcrypt.BCrypt;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 import shop.mtcoding.blog.dto.JoinDTO;
 import shop.mtcoding.blog.dto.LoginDTO;
+import shop.mtcoding.blog.dto.UserUpdateDTO;
+import shop.mtcoding.blog.model.Board;
 import shop.mtcoding.blog.model.User;
 import shop.mtcoding.blog.repository.UserRepository;
+
+import java.io.IOException;
 
 @Controller
 public class UserController {
@@ -33,7 +40,7 @@ public class UserController {
             userRepository.findByUsername(username);
             return new ResponseEntity<>("중복됨", HttpStatus.BAD_REQUEST);
         }catch(Exception e){
-            return new ResponseEntity<>("중복됨", HttpStatus.OK);
+            return new ResponseEntity<>("사용가능 아이디입니다", HttpStatus.OK);
         }
     }
 
@@ -63,9 +70,17 @@ public class UserController {
         System.out.println("테스트 : password : " + loginDTO.getPassword());
 
         try {
-            User user = userRepository.findByUsernameAndPassword(loginDTO);
-            session.setAttribute("sessionUser", user);
-            return "redirect:/";
+
+            User user = userRepository.findByUsername(loginDTO.getUsername());
+            System.out.println(loginDTO.getPassword());
+            System.out.println(user.getPassword());
+            boolean isValid = BCrypt.checkpw(loginDTO.getPassword(),user.getPassword());
+            if(user != null && isValid == true ){
+                session.setAttribute("sessionUser", user);
+                return "redirect:/";
+            }else{
+                return "redirect:/exLogin";
+            }
         } catch (Exception e) {
             return "redirect:/exLogin";
         }
@@ -90,6 +105,9 @@ public class UserController {
             userRepository.findByUsername(joinDTO.getUsername());
             return "redirect:/50x";
         }catch(Exception e){
+            String encPassword = BCrypt.hashpw(joinDTO.getPassword(), BCrypt.gensalt());
+            System.out.println("테스트 1: "+ encPassword );
+            joinDTO.setPassword(encPassword);
             userRepository.save(joinDTO); // 핵심 기능
             return "redirect:/loginForm";
         }
@@ -154,9 +172,21 @@ public class UserController {
         return "user/loginForm";
     }
 
-    @GetMapping("/user/updateForm")
-    public String updateForm() {
+    @GetMapping("/user/{id}/updateForm")
+    public String updateForm(@PathVariable Integer id,HttpServletRequest request) {
+        User user = userRepository.findById(id);
+        request.setAttribute("user",user);
         return "user/updateForm";
+    }
+    @PostMapping("/user/update")
+    public void userUpdate(UserUpdateDTO userUpdateDTO, HttpServletResponse response) throws IOException {
+        userUpdateDTO.setPassword(BCrypt.hashpw(userUpdateDTO.getPassword(), BCrypt.gensalt()));
+        System.out.println(userUpdateDTO.getUsername());
+        System.out.println(userUpdateDTO.getPassword());
+        System.out.println(userUpdateDTO.getEmail());
+        userRepository.updateByPassword(userUpdateDTO);
+
+        response.sendRedirect("/");
     }
 
     @GetMapping("/logout")
